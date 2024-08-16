@@ -3,23 +3,35 @@ name: Validate Pull Request
 on:
   workflow_dispatch:
   push:
-    branches: [ 'master' ]
+    branches: [ 'feature/*', 'main' ]
   pull_request:
-    branches: [ 'master' ]
+    branches: [ 'feature/*', 'main' ]
 
+permissions:
+  contents: read #those permissions are required to run the codeql analysis
+  actions: read
+  security-events: write
+  
 jobs:
   build:
     runs-on: ubuntu-latest
     env:
       solutionName: Microsoft.Graph.Beta.sln
+      projectName: src/Microsoft.Graph/Microsoft.Graph.Beta.csproj
     steps:
-      - uses: actions/checkout@v3.3.0
+      - uses: actions/checkout@v4.1.7
       - name: Setup .NET
-        uses: actions/setup-dotnet@v3.0.3
+        uses: actions/setup-dotnet@v4.0.1
         with:
-          dotnet-version: 6.0.x
+          dotnet-version: 7.x
       - name: Restore dependencies
         run: dotnet restore ${{ env.solutionName }}
+      - name: Build for netstandard2.0
+        run: dotnet build ${{ env.projectName }} -f netstandard2.0 --no-restore -c Release
+      - name: Build for netstandard2.1
+        run: dotnet build ${{ env.projectName }} -f netstandard2.1 --no-restore -c Release
+      - name: Build for net5.0
+        run: dotnet build ${{ env.projectName }} -f net5.0 --no-restore -c Release
       - name: Build
         run: dotnet build ${{ env.solutionName }} --no-restore -c Release
       - name: Test
@@ -28,18 +40,23 @@ jobs:
   analyze:
     name: Analyze
     runs-on: ubuntu-latest
+    env:
+      solutionName: Microsoft.Graph.Beta.sln
+      projectName: src/Microsoft.Graph/Microsoft.Graph.Beta.csproj
     strategy:
       fail-fast: false
       matrix:
         language: [ 'csharp' ]
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v3.3.0
+      uses: actions/checkout@v4.1.7
     - name: Initialize CodeQL
-      uses: github/codeql-action/init@v2
+      uses: github/codeql-action/init@v3
       with:
         languages: ${{ matrix.language }}
-    - name: Autobuild
-      uses: github/codeql-action/autobuild@v2
+    - name: Restore dependencies
+      run: dotnet restore ${{ env.solutionName }}
+    - name: Build for netstandard2.0
+      run: dotnet build ${{ env.projectName }} -f netstandard2.0 --no-restore -c Release --no-incremental
     - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v2
+      uses: github/codeql-action/analyze@v3
